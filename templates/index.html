@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Network Monitor</title>
+<style>
+    body { font-family: Arial; background: #111; color: #eee; margin:0; padding:0;}
+    h2 { margin: 10px 0; }
+    .container { display: flex; flex-direction: column; height: 100vh; padding: 10px; box-sizing: border-box;}
+    
+    .stats { display: flex; gap: 20px; margin-bottom: 10px; }
+    .stat-box { background: #222; padding: 10px 15px; border-radius: 5px; flex:1; text-align:center; }
+    .stat-box h3 { margin:5px 0; font-size:14px; }
+    .stat-box p { margin:0; font-size:16px; font-weight:bold; }
+
+    .top { display: flex; flex: 1; gap: 10px; }
+    .left { flex: 0.6; overflow-y: auto; background: #222; padding: 10px; border-radius: 5px; }
+    .right { flex: 1.4; overflow-y: auto; background: #222; padding: 10px; border-radius: 5px; }
+    .bottom { flex: 1; margin-top: 10px; overflow-y: auto; background: #222; padding: 10px; border-radius: 5px; }
+
+    table { width: 100%; border-collapse: collapse; transition: all 0.2s ease; }
+    th, td { border: 1px solid #444; padding: 6px; text-align: center; font-size: 12px; transition: all 0.2s ease; }
+
+    #alertsTable th { background: #550000; color: #fff; }
+    #alertsTable td { background: #330000; color: #fff; }
+    #alertsTable tbody tr:hover td {
+        background-color: #880000;
+        font-size: 14px;
+        padding: 10px;
+    }
+
+    #packetsTable th { background: #333; color: #eee; }
+    #packetsTable td { background: #222; color: #eee; }
+    #packetsTable tbody tr:hover td {
+        background-color: #444;
+        font-size: 13px;
+        padding: 10px;
+    }
+
+    canvas { width: 100%; height: 500px; }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+    <div class="stats">
+        <div class="stat-box" id="topTalker">
+            <h3>Top Talker</h3>
+            <p>-</p>
+        </div>
+        <div class="stat-box" id="topListener">
+            <h3>Top Listener</h3>
+            <p>-</p>
+        </div>
+        <div class="stat-box" id="topPort">
+            <h3>Top Port</h3>
+            <p>-</p>
+        </div>
+        <div class="stat-box" id="packetRates">
+            <h3>Packet Rates (pkt/s)</h3>
+            <p>-</p>
+        </div>
+    </div>
+
+    <div class="top">
+        <div class="left">
+            <h2>Alerts</h2>
+            <table id="alertsTable">
+                <thead>
+                    <tr>
+                        <th>IP</th>
+                        <th>Description</th>
+                        <th>Date</th>
+                        <th>Time</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div class="right">
+            <h2>Traffic Chart</h2>
+            <canvas id="trafficChart" width="800" height="500"></canvas>
+        </div>
+    </div>
+
+    <div class="bottom">
+        <h2>Packets (Last 30)</h2>
+        <table id="packetsTable">
+            <thead>
+                <tr>
+                    <th>Src IP</th>
+                    <th>Dst IP</th>
+                    <th>Protocol</th>
+                    <th>Size</th>
+                    <th>Time</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+// ----- Load Stats -----
+async function loadStats() {
+    const res = await fetch("/api/stats");
+    const data = await res.json();
+    document.querySelector("#topTalker p").innerText = `${data.top_talker.ip || '-'} (${data.top_talker.count})`;
+    document.querySelector("#topListener p").innerText = `${data.top_listener.ip || '-'} (${data.top_listener.count})`;
+    document.querySelector("#topPort p").innerText = `${data.top_port.port || '-'} (${data.top_port.count})`;
+    let ratesText = '';
+    for(const proto in data.packet_rate){
+        ratesText += `${proto}: ${data.packet_rate[proto].toFixed(1)} `;
+    }
+    document.querySelector("#packetRates p").innerText = ratesText || '-';
+}
+
+// ----- Load Alerts -----
+async function loadAlerts() {
+    const res = await fetch("/api/alerts");
+    const data = await res.json();
+    const tbody = document.querySelector("#alertsTable tbody");
+    tbody.innerHTML = "";
+    data.forEach(a=>{
+        tbody.innerHTML += `<tr>
+            <td>${a[0]}</td>
+            <td>${a[1]}</td>
+            <td>${a[2]}</td>
+            <td>${a[3]}</td>
+        </tr>`;
+    });
+}
+
+// ----- Load Packets -----
+async function loadPackets() {
+    const res = await fetch("/api/packets");
+    const data = await res.json();
+    const tbody = document.querySelector("#packetsTable tbody");
+    tbody.innerHTML = "";
+    data.forEach(p=>{
+        tbody.innerHTML += `<tr>
+            <td>${p[0]}</td>
+            <td>${p[1]}</td>
+            <td>${p[2]}</td>
+            <td>${p[3]}</td>
+            <td>${p[4]}</td>
+        </tr>`;
+    });
+}
+
+// ----- Draw Traffic Chart with Legend -----
+function drawTrafficChart(labels, series) {
+    const canvas = document.getElementById("trafficChart");
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0,0,canvas.width, canvas.height);
+
+    const chartWidth = canvas.width - 60;
+    const chartHeight = canvas.height - 80;
+    const leftPadding = 50;
+    const topPadding = 40;
+
+    let maxVal = 1;
+    Object.values(series).forEach(arr=>arr.forEach(v=>{if(v>maxVal) maxVal=v;}));
+    const xStep = chartWidth / (labels.length-1 || 1);
+    const colors = ["red","cyan","lime","orange","magenta","yellow"];
+    let i = 0;
+
+    // Draw Lines and Points
+    for(const proto in series){
+        const data = series[proto];
+        ctx.strokeStyle = colors[i % colors.length];
+        ctx.fillStyle = colors[i % colors.length];
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        data.forEach((val, idx)=>{
+            const x = leftPadding + idx*xStep;
+            const y = topPadding + chartHeight*(1 - val/maxVal);
+            if(idx===0) ctx.moveTo(x,y);
+            else ctx.lineTo(x,y);
+        });
+        ctx.stroke();
+        data.forEach((val, idx)=>{
+            const x = leftPadding + idx*xStep;
+            const y = topPadding + chartHeight*(1 - val/maxVal);
+            ctx.beginPath();
+            ctx.arc(x,y,3,0,2*Math.PI);
+            ctx.fill();
+        });
+        i++;
+    }
+
+    // ----- Draw Legend -----
+    i = 0;
+    const legendX = leftPadding;
+    const legendY = 20;
+    const maxPerLine = 6;
+    for(const proto in series){
+        const line = Math.floor(i/maxPerLine);
+        const posX = legendX + (i % maxPerLine)*120;
+        const posY = legendY + line*20;
+        ctx.fillStyle = colors[i % colors.length];
+        ctx.fillRect(posX, posY-10, 15, 15);
+        ctx.fillStyle = "#eee";
+        ctx.fillText(proto, posX + 20, posY+2);
+        i++;
+    }
+
+    // ----- Draw Axes -----
+    ctx.strokeStyle = "#888";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(leftPadding, topPadding);
+    ctx.lineTo(leftPadding, topPadding+chartHeight);
+    ctx.lineTo(leftPadding+chartWidth, topPadding+chartHeight);
+    ctx.stroke();
+
+    // Y Axis Labels
+    ctx.fillStyle = "#eee";
+    ctx.font = "10px Arial";
+    for(let j=0;j<=5;j++){
+        const y = topPadding + chartHeight*(1 - j/5);
+        const val = Math.round(maxVal*j/5);
+        ctx.fillText(val, 5, y+3);
+        ctx.beginPath();
+        ctx.moveTo(leftPadding-5, y);
+        ctx.lineTo(leftPadding+chartWidth, y);
+        ctx.strokeStyle = "#444";
+        ctx.stroke();
+    }
+
+    // X Axis Labels
+    // labels.forEach((label, idx)=>{
+    //     const x = leftPadding + idx*xStep;
+    //     ctx.fillStyle = "#eee";
+    //     let timeLabel = label.split(':');
+    //     let hhmm = timeLabel[0]+":"+timeLabel[1];
+    //     ctx.fillText(hhmm, x-30, topPadding+chartHeight+30);
+    // });
+}
+
+// ----- Load Traffic Timeline -----
+async function loadTraffic() {
+    const res = await fetch("/api/traffic-timeline");
+    const data = await res.json();
+    drawTrafficChart(data.labels, data.series);
+}
+
+// ----- Refresh All -----
+async function refresh() {
+    await loadStats();
+    await loadAlerts();
+    await loadPackets();
+    await loadTraffic();
+}
+
+refresh();
+setInterval(refresh, 1000);
+</script>
+
+</body>
+</html>
