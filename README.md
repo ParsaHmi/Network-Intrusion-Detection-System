@@ -63,6 +63,7 @@ to open the dashboard, run app.py
 3. in the end, go to **localhost:5000** and Done!
 
 # Now you should see thid screen :
+
 <br />![first page](images/menu.png)
 
 
