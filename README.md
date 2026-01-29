@@ -70,32 +70,50 @@ to open the dashboard, run app.py
 <br /><br />
 ---
 <br /><br />
+
 # after you start sniffing it gets like this :
+
 <br />![snnifing](images/start.png)
 <br /><br />
 ---
-<br /><br /># when it detect abnormal traffic it will show it in alert table, you can see the chart that the valume of packets getting more during the attack :
+<br /><br />
+
+# when it detect abnormal traffic it will show it in alert table, you can see the chart that the valume of packets getting more during the attack :
+
 <br />![abnormal traffic](images/abnormal.png)
 <br /><br />
 ---
-<br /><br /># detecting port scan, it also detect possible ddos attack because destination ip was fixed :
+<br /><br />
+
+# detecting port scan, it also detect possible ddos attack because destination ip was fixed :
+
 <br />![port scan](images/port.png)
 <br /><br />
 ---
-<br /><br /># detecting broadcast storm, also you can see the chart that show the number of packets :
+<br /><br />
+
+# detecting broadcast storm, also you can see the chart that show the number of packets :
+
 <br />![fake dhcp server](images/dhcpserver.png)
 <br /><br />
 ---
-<br /><br /># detecting fake DHCP server :
+<br /><br />
+
+# detecting fake DHCP server :
+
 <br />![fake dhcp server](images/dhcpserver.png)
 <br /><br />
 ---
-<br /><br /># detecting DHCP starvation attack :
+<br /><br />
+
+# detecting DHCP starvation attack :
+
 <br />![fake dhcp server](images/dhcpserver.png)
 
 <br /><br />
 ---
 <br /><br />
+
 # Disclaimer
 
 ## **This project is intended **for educational and research purposes only**. Do not use it on networks you do not own or have permission to monitor.**
